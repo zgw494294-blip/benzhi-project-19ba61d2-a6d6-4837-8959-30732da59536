@@ -259,7 +259,11 @@ func (s *Store) List() ([]*domain.TrialTask, error) {
 	sort.Strings(ids)
 	result := make([]*domain.TrialTask, 0, len(ids))
 	for _, id := range ids {
-		result = append(result, s.tasks[id])
+		copy, err := cloneTask(s.tasks[id])
+		if err != nil {
+			return nil, err
+		}
+		result = append(result, copy)
 	}
 	return result, nil
 }
