@@ -122,18 +122,21 @@ type createTrialOutcome struct {
 	err    error
 }
 
-func (s *Service) createTrialLocked(cmd CreateTrialCommand, digest string) (*ActionResult, error) {
+func (s *Service) createTrialLocked(ctx context.Context, cmd CreateTrialCommand, digest string) (*ActionResult, error) {
 	if raw, ok, err := s.store.Replay(cmd.ID, cmd.IdempotencyKey, digest); err != nil {
 		return nil, err
 	} else if ok {
 		return decodeResult(raw)
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, err
 	}
 	task, err := domain.NewTrialTask(cmd.ID, cmd.SiteName, cmd.WallSection, cmd.SubstrateCondition, cmd.Owner, cmd.AcceptanceThresholds, s.now())
 	if err != nil {
 		return nil, err
 	}
 	result := resultFor(task)
-	raw, err := s.store.Commit(task, 0, "trial_created", cmd.Owner, cmd.IdempotencyKey, digest, result)
+	raw, err := s.store.CommitWithContext(ctx, task, 0, "trial_created", cmd.Owner, cmd.IdempotencyKey, digest, result)
 	if err != nil {
 		return nil, err
 	}
@@ -164,7 +167,11 @@ func (s *Service) CreateTrial(ctx context.Context, cmd CreateTrialCommand) (*Act
 		lock.Lock()
 		close(started)
 		defer lock.Unlock()
-		result, err := s.createTrialLocked(cmd, digest)
+		if err := ctx.Err(); err != nil {
+			outcome <- createTrialOutcome{err: err}
+			return
+		}
+		result, err := s.createTrialLocked(ctx, cmd, digest)
 		outcome <- createTrialOutcome{result: result, err: err}
 	}()
 	<-started

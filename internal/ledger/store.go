@@ -2,6 +2,7 @@ package ledger
 
 import (
 	"bufio"
+	"context"
 	"crypto/sha256"
 	"encoding/binary"
 	"encoding/hex"
@@ -284,6 +285,20 @@ func (s *Store) Replay(taskID, key, requestDigest string) (json.RawMessage, bool
 func (s *Store) Commit(task *domain.TrialTask, expectedVersion int, eventType, actor, key, requestDigest string, response any) (json.RawMessage, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	return s.commitLocked(task, expectedVersion, eventType, actor, key, requestDigest, response)
+}
+
+// CommitWithContext 在获取仓储写锁后、落盘前再检查一次 ctx；创建任务若在此期间被取消则不写入目标任务。
+func (s *Store) CommitWithContext(ctx context.Context, task *domain.TrialTask, expectedVersion int, eventType, actor, key, requestDigest string, response any) (json.RawMessage, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	return s.commitLocked(task, expectedVersion, eventType, actor, key, requestDigest, response)
+}
+
+func (s *Store) commitLocked(task *domain.TrialTask, expectedVersion int, eventType, actor, key, requestDigest string, response any) (json.RawMessage, error) {
 	idemKey := task.ID + "\x00" + key
 	if prior, ok := s.idempotency[idemKey]; ok {
 		if prior.RequestDigest != requestDigest {
