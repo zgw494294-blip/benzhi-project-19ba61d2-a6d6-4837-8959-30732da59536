@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"sort"
+	"strings"
 	"time"
 
 	"benzhi-project-19ba61d2-a6d6-4837-8959-30732da59536/internal/domain"
@@ -280,10 +281,27 @@ func (s *Service) GetTrialView(ctx context.Context, taskID string) (*TrialDetail
 	return s.GetTrialViewForApprover(ctx, taskID, "")
 }
 
+// invalidateTrialViews 在写请求成功提交后清除该任务的所有详情视图缓存。
+// 必须在 mutate/CreateTrial 提交成功后调用，确保后续详情查询重新基于最新任务投影构建。
+func (s *Service) invalidateTrialViews(taskID string) {
+	s.viewsMu.Lock()
+	defer s.viewsMu.Unlock()
+	for key := range s.detailViews {
+		if k, _, ok := strings.Cut(key, "\x00"); ok && k == taskID {
+			delete(s.detailViews, key)
+		}
+	}
+}
+
 func (s *Service) GetTrialViewForApprover(ctx context.Context, taskID, approver string) (*TrialDetailView, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
+	// 在任务锁下检查缓存并构建视图，确保与同一任务的写请求互斥，
+	// 避免读请求在缓存缺失时读取到随后被提交覆盖的旧投影并回写旧快照。
+	lock := s.taskLock(taskID)
+	lock.Lock()
+	defer lock.Unlock()
 	cacheKey := taskID + "\x00" + approver
 	s.viewsMu.RLock()
 	view := s.detailViews[cacheKey]

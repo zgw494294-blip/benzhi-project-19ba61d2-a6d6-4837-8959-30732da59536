@@ -158,6 +158,7 @@ func (s *Service) CreateTrial(ctx context.Context, cmd CreateTrialCommand) (*Act
 	if err != nil {
 		return nil, err
 	}
+	s.invalidateTrialViews(cmd.ID)
 	return decodeResult(raw)
 }
 
@@ -201,6 +202,7 @@ func (s *Service) mutate(ctx context.Context, taskID string, meta WriteMeta, act
 	if err != nil {
 		return nil, err
 	}
+	s.invalidateTrialViews(taskID)
 	return decodeResult(raw)
 }
 
