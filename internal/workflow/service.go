@@ -286,10 +286,10 @@ func (s *Service) AddRemediation(ctx context.Context, taskID string, cmd Remedia
 	if strings.TrimSpace(cmd.Plan.ID) == "" {
 		cmd.Plan.ID = deterministicID("PLAN", cmd.IdempotencyKey)
 	}
-	if err := policy.ValidateRemediationDates(cmd.Plan, s.now()); err != nil {
-		return nil, err
-	}
 	return s.mutate(ctx, taskID, cmd.WriteMeta, "remediation_planned", cmd.Actor, cmd, func(task *domain.TrialTask) error {
+		if err := policy.ValidateRemediationDates(cmd.Plan, s.now()); err != nil {
+			return err
+		}
 		return task.AddRemediation(cmd.PanelID, cmd.Plan, cmd.Actor, s.now())
 	})
 }
