@@ -196,6 +196,38 @@ func (s *Store) verifyExistingProjection() error {
 	if previous.LastSequence == s.lastSequence && previous.LastDigest != s.lastDigest {
 		return errors.New("投影摘要与事件日志不一致")
 	}
+	if previous.LastSequence == s.lastSequence {
+		return s.adoptProjection(previous)
+	}
+	return nil
+}
+
+func (s *Store) adoptProjection(previous projection) error {
+	tasks := make(map[string]*domain.TrialTask, len(previous.Tasks))
+	credentials := make(map[string]string)
+	for id, task := range previous.Tasks {
+		if task == nil || task.ID != id {
+			return fmt.Errorf("投影任务 %s 的身份不一致", id)
+		}
+		copy, err := cloneTask(task)
+		if err != nil {
+			return err
+		}
+		tasks[id] = copy
+		if copy.Credential != nil {
+			credentials[copy.Credential.CredentialNo] = id
+		}
+	}
+	idempotency := make(map[string]idempotencyRecord, len(previous.Idempotency))
+	for key, record := range previous.Idempotency {
+		idempotency[key] = idempotencyRecord{
+			RequestDigest: record.RequestDigest,
+			Response:      append(json.RawMessage(nil), record.Response...),
+		}
+	}
+	s.tasks = tasks
+	s.idempotency = idempotency
+	s.credentialTask = credentials
 	return nil
 }
 
