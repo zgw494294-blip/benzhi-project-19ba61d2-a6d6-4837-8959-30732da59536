@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>MuralMortarGate · 壁画修复灰浆放行台</title>
+  <link rel="stylesheet" href="/assets/app.css">
+  <link rel="stylesheet" href="/assets/extensions.css">
+</head>
+<body>
+  <header>
+    <div><span class="eyebrow">MURAL CONSERVATION / EVIDENCE GATE</span><h1>壁画修复灰浆放行台</h1></div>
+    <div id="connection" class="status">正在检查服务</div>
+  </header>
+  <main>
+    <section class="hero">
+      <div><p class="eyebrow">MuralMortarGate</p><h2>先让证据通过，再让灰浆靠近壁画。</h2><p>试配、养护、偏差、整改、冻结与放行，沿同一条可校验轨迹推进。</p></div>
+      <div class="task-state"><small>当前任务</small><strong id="task-id">尚未建档</strong><span id="task-status">draft · v0</span></div>
+    </section>
+    <nav aria-label="业务步骤">
+      <button data-step="setup" class="active">01 任务与试板</button><button data-step="measure">02 养护检验</button><button data-step="deviation">03 偏差与复验</button><button data-step="release">04 冻结与放行</button>
+    </nav>
+    <div id="notice" role="status" aria-live="polite"></div>
+
+    <section id="setup" class="page active">
+      <div class="section-title"><div><span class="eyebrow">TRIAL BRIEF</span><h2>创建试配任务</h2></div><button id="refresh" class="secondary">刷新当前任务</button></div>
+      <form id="trial-form" class="form-grid four">
+        <label>保护对象<input name="siteName" required placeholder="如：延福寺大殿壁画"></label>
+        <label>施工部位<input name="wallSection" required placeholder="如：东壁画心下段"></label>
+        <label>基底条件<input name="substrateCondition" required placeholder="夯土、酥碱程度、含水情况"></label>
+        <label>任务负责人<input name="owner" required></label>
+        <label>最大色差 ΔE<input name="maxColorDifference" type="number" step="0.01" value="2" required></label>
+        <label>最大收缩率 %<input name="maxShrinkagePct" type="number" step="0.01" value="1" required></label>
+        <label>最小粘结强度 MPa<input name="minBondStrengthMPa" type="number" step="0.01" value="0.3" required></label>
+        <label>最大粉化等级<input name="maxPowderingGrade" type="number" min="0" max="5" value="1" required></label>
+        <button class="primary" type="submit">生成草拟任务</button>
+      </form>
+      <hr>
+      <div class="section-title"><div><span class="eyebrow">FORMULA & PANEL</span><h2>登记配方与试板</h2></div><span>组分比例必须合计 100%</span></div>
+      <form id="panel-form" class="form-grid four">
+        <label>配方登记方式<select name="formulaMode"><option value="new">登记新配方</option><option value="existing">引用任务内既有配方</option></select></label>
+        <label>既有配方<select name="existingFormulaId" disabled></select></label>
+        <div class="wide"></div>
+        <div id="formula-fields" class="subgrid">
+        <label>配方编号<input name="formulaId" required value="F-01"></label><label>修订号<input name="revision" type="number" min="1" value="1" required></label>
+        <label>主料名称<input name="componentA" value="熟石灰" required></label><label>主料比例 %<input name="percentageA" type="number" step="0.01" value="70" required></label>
+        <label>主料批次<input name="batchA" required></label><label>辅料名称<input name="componentB" value="细砂" required></label>
+        <label>辅料比例 %<input name="percentageB" type="number" step="0.01" value="30" required></label><label>辅料批次<input name="batchB" required></label>
+        <label>水料比<input name="waterRatio" type="number" step="0.01" value="0.42" required></label><label>搅拌方法<input name="mixingMethod" required value="低速湿拌 5 分钟"></label>
+        <label>制备人<input name="preparedBy" required></label><label>制备时间<input name="preparedAt" type="datetime-local" required></label>
+        <label>制备温度 ℃<input name="temperatureC" type="number" step="0.1" value="20" required></label><label>相对湿度 %<input name="humidityPct" type="number" step="0.1" value="55" required></label>
+        </div>
+        <div class="wide"><strong>平行试板行</strong><div id="parallel-panel-rows"></div><button id="add-panel-row" class="secondary" type="button">增加平行试板</button></div>
+        <button class="primary" type="submit">整组提交并进入养护</button>
+      </form>
+      <div id="panel-list" class="cards empty">尚未登记试板。</div>
+    </section>
+
+    <section id="measure" class="page">
+      <div class="section-title"><div><span class="eyebrow">CURING MATRIX</span><h2>按节点确认原始测量</h2></div><span>确认后不可覆盖</span></div>
+      <form id="measurement-form">
+        <div id="curing-queue" class="cards empty">尚无养护节点。</div>
+        <button class="primary large" type="submit">原子确认所选到期测量</button>
+      </form>
+      <div class="table-wrap"><table><thead><tr><th>试板</th><th>节点/轮次</th><th>色差</th><th>收缩率</th><th>粘结强度</th><th>粉化</th><th>结论</th></tr></thead><tbody id="measurement-table"></tbody></table></div>
+    </section>
+
+    <section id="deviation" class="page">
+      <div class="section-title"><div><span class="eyebrow">DEVIATION CONTROL</span><h2>专业裁决与整改复验</h2></div><span>保留前次结果</span></div>
+      <div id="deviation-list" class="cards empty">暂无偏差。</div>
+      <form id="review-form" class="form-grid four">
+        <label>试板 ID<input name="panelId" required></label><label>偏差 ID<input name="deviationId" required></label><label>保护责任人<input name="reviewer" required></label>
+        <label>裁决<select name="conclusion"><option value="remediation_required">需要整改</option><option value="accepted">专业接受</option></select></label><label class="wide">专业结论说明<textarea name="note" required></textarea></label>
+        <button class="primary" type="submit">提交不可覆盖裁决</button>
+      </form>
+      <form id="remediation-form" class="form-grid four compact">
+        <h3>限期整改方案</h3><label>试板 ID<input name="panelId" required></label><label>偏差 ID<input name="deviationId" required></label><label>责任人<input name="responsible" required></label>
+        <label>完成期限<input name="dueDate" type="date" required></label><label class="wide">整改措施<textarea name="action" required></textarea></label><label>登记人<input name="actor" required></label>
+        <button class="primary" type="submit">登记整改方案</button>
+      </form>
+      <form id="retest-form" class="form-grid four compact">
+        <h3>新一轮复验</h3><label>试板 ID<input name="panelId" required></label><label>整改方案 ID<input name="planId" required></label><label>测量人<input name="measuredBy" required></label>
+        <label>色差 ΔE<input name="colorDifference" type="number" step="0.01" required></label><label>收缩率 %<input name="shrinkagePct" type="number" step="0.01" required></label>
+        <label>粘结强度 MPa<input name="bondStrengthMPa" type="number" step="0.01" required></label><label>粉化等级<input name="powderingGrade" type="number" min="0" max="5" required></label>
+        <label class="wide">复验观察<textarea name="observation" required></textarea></label><button class="primary" type="submit">确认复验</button>
+      </form>
+    </section>
+
+    <section id="release" class="page">
+      <div class="section-title"><div><span class="eyebrow">RELEASE GATE</span><h2>冻结施工批次并签发凭据</h2></div></div>
+      <form id="freeze-form" class="form-grid four">
+        <label>现场施工负责人<input name="approvedBy" required></label><div class="wide"><span>输入身份后刷新职责分离与候选摘要</span></div><button id="refresh-eligibility" class="secondary" type="button">刷新预检矩阵</button>
+        <div id="eligibility-matrix" class="wide cards empty">输入批准人后查看冻结候选。</div><button class="primary" type="submit">按所选预检摘要冻结</button>
+      </form>
+      <button id="issue" class="primary large">签发递增序号放行凭据</button>
+      <div id="credential-card" class="credential empty">冻结且批准后方可签发。</div>
+      <form id="verify-form" class="verify"><label>凭据编号<input name="number" placeholder="MMG-00000001" required></label><button class="secondary">查询并重算摘要</button></form>
+      <div id="verify-result"></div>
+      <h3>完整状态轨迹</h3><div id="audit" class="timeline"></div>
+    </section>
+  </main>
+  <footer>本地回环服务 · 任务级串行提交 · 版本冲突保护 · 幂等重试 · 校验链账本</footer>
+  <script src="/assets/app.js" defer></script>
+</body>
+</html>
