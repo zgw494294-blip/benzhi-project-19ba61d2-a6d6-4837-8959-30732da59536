@@ -16,11 +16,10 @@ import (
 )
 
 type Service struct {
-	store        *ledger.Store
-	now          func() time.Time
-	locksMu      sync.Mutex
-	taskLocks    map[string]*sync.Mutex
-	credentialMu sync.Mutex
+	store     *ledger.Store
+	now       func() time.Time
+	locksMu   sync.Mutex
+	taskLocks map[string]*sync.Mutex
 }
 
 func NewService(store *ledger.Store) *Service {
@@ -325,8 +324,6 @@ func (s *Service) Freeze(ctx context.Context, taskID string, cmd FreezeCommand) 
 }
 
 func (s *Service) Release(ctx context.Context, taskID string, cmd ReleaseCommand) (*ActionResult, error) {
-	s.credentialMu.Lock()
-	defer s.credentialMu.Unlock()
 	sequence, previous := s.store.NextCredentialSequence()
 	return s.mutate(ctx, taskID, cmd.WriteMeta, "credential_issued", cmd.ApprovedBy, cmd, func(task *domain.TrialTask) error {
 		_, err := task.IssueCredential(sequence, previous, cmd.ApprovedBy, s.now())
