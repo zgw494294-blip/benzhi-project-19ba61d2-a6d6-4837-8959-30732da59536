@@ -21,10 +21,22 @@ type Service struct {
 	locksMu      sync.Mutex
 	taskLocks    map[string]*sync.Mutex
 	credentialMu sync.Mutex
+	responsesMu  sync.RWMutex
+	responses    map[string]cachedActionResult
+}
+
+type cachedActionResult struct {
+	requestDigest string
+	result        *ActionResult
 }
 
 func NewService(store *ledger.Store) *Service {
-	return &Service{store: store, now: func() time.Time { return time.Now().UTC() }, taskLocks: map[string]*sync.Mutex{}}
+	return &Service{
+		store:     store,
+		now:       func() time.Time { return time.Now().UTC() },
+		taskLocks: map[string]*sync.Mutex{},
+		responses: map[string]cachedActionResult{},
+	}
 }
 
 func (s *Service) taskLock(taskID string) *sync.Mutex {
@@ -72,6 +84,34 @@ func decodeResult(raw json.RawMessage) (*ActionResult, error) {
 		return nil, err
 	}
 	return &result, nil
+}
+
+func responseCacheKey(taskID, idempotencyKey string) string {
+	return taskID + "\x00" + idempotencyKey
+}
+
+func (s *Service) cachedResponse(taskID, idempotencyKey, digest string) (*ActionResult, bool, error) {
+	s.responsesMu.RLock()
+	entry, ok := s.responses[responseCacheKey(taskID, idempotencyKey)]
+	s.responsesMu.RUnlock()
+	if !ok {
+		return nil, false, nil
+	}
+	if entry.requestDigest != digest {
+		return nil, false, domain.Conflict("同一 idempotencyKey 已用于不同请求")
+	}
+	return entry.result, true, nil
+}
+
+func (s *Service) rememberResponse(taskID, idempotencyKey, digest string, raw json.RawMessage) (*ActionResult, error) {
+	result, err := decodeResult(raw)
+	if err != nil {
+		return nil, err
+	}
+	s.responsesMu.Lock()
+	s.responses[responseCacheKey(taskID, idempotencyKey)] = cachedActionResult{requestDigest: digest, result: result}
+	s.responsesMu.Unlock()
+	return result, nil
 }
 
 func resultFor(task *domain.TrialTask) *ActionResult {
@@ -137,10 +177,15 @@ func (s *Service) CreateTrial(ctx context.Context, cmd CreateTrialCommand) (*Act
 	lock := s.taskLock(cmd.ID)
 	lock.Lock()
 	defer lock.Unlock()
+	if result, ok, err := s.cachedResponse(cmd.ID, cmd.IdempotencyKey, digest); err != nil {
+		return nil, err
+	} else if ok {
+		return result, nil
+	}
 	if raw, ok, err := s.store.Replay(cmd.ID, cmd.IdempotencyKey, digest); err != nil {
 		return nil, err
 	} else if ok {
-		return decodeResult(raw)
+		return s.rememberResponse(cmd.ID, cmd.IdempotencyKey, digest, raw)
 	}
 	task, err := domain.NewTrialTask(cmd.ID, cmd.SiteName, cmd.WallSection, cmd.SubstrateCondition, cmd.Owner, cmd.AcceptanceThresholds, s.now())
 	if err != nil {
@@ -151,7 +196,7 @@ func (s *Service) CreateTrial(ctx context.Context, cmd CreateTrialCommand) (*Act
 	if err != nil {
 		return nil, err
 	}
-	return decodeResult(raw)
+	return s.rememberResponse(cmd.ID, cmd.IdempotencyKey, digest, raw)
 }
 
 func (s *Service) mutate(ctx context.Context, taskID string, meta WriteMeta, action, actor string, command any, mutate func(*domain.TrialTask) error) (*ActionResult, error) {
@@ -171,10 +216,15 @@ func (s *Service) mutate(ctx context.Context, taskID string, meta WriteMeta, act
 	lock := s.taskLock(taskID)
 	lock.Lock()
 	defer lock.Unlock()
+	if result, ok, err := s.cachedResponse(taskID, meta.IdempotencyKey, digest); err != nil {
+		return nil, err
+	} else if ok {
+		return result, nil
+	}
 	if raw, ok, err := s.store.Replay(taskID, meta.IdempotencyKey, digest); err != nil {
 		return nil, err
 	} else if ok {
-		return decodeResult(raw)
+		return s.rememberResponse(taskID, meta.IdempotencyKey, digest, raw)
 	}
 	task, err := s.store.Load(taskID)
 	if err != nil {
@@ -194,7 +244,7 @@ func (s *Service) mutate(ctx context.Context, taskID string, meta WriteMeta, act
 	if err != nil {
 		return nil, err
 	}
-	return decodeResult(raw)
+	return s.rememberResponse(taskID, meta.IdempotencyKey, digest, raw)
 }
 
 func (s *Service) RegisterPanel(ctx context.Context, taskID string, cmd RegisterPanelCommand) (*ActionResult, error) {
