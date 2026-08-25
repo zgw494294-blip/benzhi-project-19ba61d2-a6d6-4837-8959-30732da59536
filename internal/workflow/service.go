@@ -117,6 +117,29 @@ func resultFor(task *domain.TrialTask) *ActionResult {
 	return result
 }
 
+type createTrialOutcome struct {
+	result *ActionResult
+	err    error
+}
+
+func (s *Service) createTrialLocked(cmd CreateTrialCommand, digest string) (*ActionResult, error) {
+	if raw, ok, err := s.store.Replay(cmd.ID, cmd.IdempotencyKey, digest); err != nil {
+		return nil, err
+	} else if ok {
+		return decodeResult(raw)
+	}
+	task, err := domain.NewTrialTask(cmd.ID, cmd.SiteName, cmd.WallSection, cmd.SubstrateCondition, cmd.Owner, cmd.AcceptanceThresholds, s.now())
+	if err != nil {
+		return nil, err
+	}
+	result := resultFor(task)
+	raw, err := s.store.Commit(task, 0, "trial_created", cmd.Owner, cmd.IdempotencyKey, digest, result)
+	if err != nil {
+		return nil, err
+	}
+	return decodeResult(raw)
+}
+
 func (s *Service) CreateTrial(ctx context.Context, cmd CreateTrialCommand) (*ActionResult, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
@@ -134,24 +157,23 @@ func (s *Service) CreateTrial(ctx context.Context, cmd CreateTrialCommand) (*Act
 	if err != nil {
 		return nil, err
 	}
-	lock := s.taskLock(cmd.ID)
-	lock.Lock()
-	defer lock.Unlock()
-	if raw, ok, err := s.store.Replay(cmd.ID, cmd.IdempotencyKey, digest); err != nil {
-		return nil, err
-	} else if ok {
-		return decodeResult(raw)
+	started := make(chan struct{})
+	outcome := make(chan createTrialOutcome, 1)
+	go func() {
+		lock := s.taskLock(cmd.ID)
+		lock.Lock()
+		close(started)
+		defer lock.Unlock()
+		result, err := s.createTrialLocked(cmd, digest)
+		outcome <- createTrialOutcome{result: result, err: err}
+	}()
+	<-started
+	select {
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	case completed := <-outcome:
+		return completed.result, completed.err
 	}
-	task, err := domain.NewTrialTask(cmd.ID, cmd.SiteName, cmd.WallSection, cmd.SubstrateCondition, cmd.Owner, cmd.AcceptanceThresholds, s.now())
-	if err != nil {
-		return nil, err
-	}
-	result := resultFor(task)
-	raw, err := s.store.Commit(task, 0, "trial_created", cmd.Owner, cmd.IdempotencyKey, digest, result)
-	if err != nil {
-		return nil, err
-	}
-	return decodeResult(raw)
 }
 
 func (s *Service) mutate(ctx context.Context, taskID string, meta WriteMeta, action, actor string, command any, mutate func(*domain.TrialTask) error) (*ActionResult, error) {
