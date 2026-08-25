@@ -1,6 +1,7 @@
 package webui
 
 import (
+	"context"
 	"errors"
 	"io"
 	"net/http"
@@ -108,7 +109,7 @@ func (s *Server) CreateTrialHandler(w http.ResponseWriter, r *http.Request) {
 		writeError(w, err)
 		return
 	}
-	result, err := s.service.CreateTrial(r.Context(), cmd)
+	result, err := s.service.CreateTrial(context.WithoutCancel(r.Context()), cmd)
 	if err != nil {
 		writeError(w, err)
 		return
@@ -131,7 +132,7 @@ func (s *Server) RegisterPanelHandler(w http.ResponseWriter, r *http.Request) {
 		writeError(w, err)
 		return
 	}
-	result, err := s.service.RegisterPanel(r.Context(), r.PathValue("id"), cmd)
+	result, err := s.service.RegisterPanel(context.WithoutCancel(r.Context()), r.PathValue("id"), cmd)
 	if err != nil {
 		writeError(w, err)
 		return
@@ -145,7 +146,7 @@ func (s *Server) MeasurementHandler(w http.ResponseWriter, r *http.Request) {
 		writeError(w, err)
 		return
 	}
-	result, err := s.service.RecordMeasurement(r.Context(), r.PathValue("id"), cmd)
+	result, err := s.service.RecordMeasurement(context.WithoutCancel(r.Context()), r.PathValue("id"), cmd)
 	if err != nil {
 		writeError(w, err)
 		return
@@ -159,7 +160,7 @@ func (s *Server) ReviewHandler(w http.ResponseWriter, r *http.Request) {
 		writeError(w, err)
 		return
 	}
-	result, err := s.service.ReviewDeviation(r.Context(), r.PathValue("id"), cmd)
+	result, err := s.service.ReviewDeviation(context.WithoutCancel(r.Context()), r.PathValue("id"), cmd)
 	if err != nil {
 		writeError(w, err)
 		return
@@ -173,7 +174,7 @@ func (s *Server) RemediationHandler(w http.ResponseWriter, r *http.Request) {
 		writeError(w, err)
 		return
 	}
-	result, err := s.service.AddRemediation(r.Context(), r.PathValue("id"), cmd)
+	result, err := s.service.AddRemediation(context.WithoutCancel(r.Context()), r.PathValue("id"), cmd)
 	if err != nil {
 		writeError(w, err)
 		return
@@ -187,7 +188,7 @@ func (s *Server) RetestHandler(w http.ResponseWriter, r *http.Request) {
 		writeError(w, err)
 		return
 	}
-	result, err := s.service.RecordRetest(r.Context(), r.PathValue("id"), cmd)
+	result, err := s.service.RecordRetest(context.WithoutCancel(r.Context()), r.PathValue("id"), cmd)
 	if err != nil {
 		writeError(w, err)
 		return
@@ -201,7 +202,7 @@ func (s *Server) FreezeHandler(w http.ResponseWriter, r *http.Request) {
 		writeError(w, err)
 		return
 	}
-	result, err := s.service.Freeze(r.Context(), r.PathValue("id"), cmd)
+	result, err := s.service.Freeze(context.WithoutCancel(r.Context()), r.PathValue("id"), cmd)
 	if err != nil {
 		writeError(w, err)
 		return
@@ -215,7 +216,7 @@ func (s *Server) ReleaseHandler(w http.ResponseWriter, r *http.Request) {
 		writeError(w, err)
 		return
 	}
-	result, err := s.service.Release(r.Context(), r.PathValue("id"), cmd)
+	result, err := s.service.Release(context.WithoutCancel(r.Context()), r.PathValue("id"), cmd)
 	if err != nil {
 		writeError(w, err)
 		return
