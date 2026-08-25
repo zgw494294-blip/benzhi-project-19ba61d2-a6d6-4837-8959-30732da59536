@@ -281,11 +281,25 @@ func (s *Service) GetTrialView(ctx context.Context, taskID string) (*TrialDetail
 }
 
 func (s *Service) GetTrialViewForApprover(ctx context.Context, taskID, approver string) (*TrialDetailView, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	cacheKey := taskID + "\x00" + approver
+	s.viewsMu.RLock()
+	view := s.detailViews[cacheKey]
+	s.viewsMu.RUnlock()
+	if view != nil {
+		return view, nil
+	}
 	task, err := s.GetTrial(ctx, taskID)
 	if err != nil {
 		return nil, err
 	}
-	return BuildTrialDetailForApprover(task, approver, s.now()), nil
+	view = BuildTrialDetailForApprover(task, approver, s.now())
+	s.viewsMu.Lock()
+	s.detailViews[cacheKey] = view
+	s.viewsMu.Unlock()
+	return view, nil
 }
 
 func (s *Service) PreviewEligibility(ctx context.Context, taskID, formulaID, panelID, approver string) (policy.EligibilityReport, error) {

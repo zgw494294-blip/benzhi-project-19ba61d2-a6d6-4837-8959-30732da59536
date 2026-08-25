@@ -20,11 +20,18 @@ type Service struct {
 	now          func() time.Time
 	locksMu      sync.Mutex
 	taskLocks    map[string]*sync.Mutex
+	viewsMu      sync.RWMutex
+	detailViews  map[string]*TrialDetailView
 	credentialMu sync.Mutex
 }
 
 func NewService(store *ledger.Store) *Service {
-	return &Service{store: store, now: func() time.Time { return time.Now().UTC() }, taskLocks: map[string]*sync.Mutex{}}
+	return &Service{
+		store:       store,
+		now:         func() time.Time { return time.Now().UTC() },
+		taskLocks:   map[string]*sync.Mutex{},
+		detailViews: map[string]*TrialDetailView{},
+	}
 }
 
 func (s *Service) taskLock(taskID string) *sync.Mutex {
